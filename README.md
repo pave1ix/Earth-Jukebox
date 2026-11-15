@@ -1,26 +1,45 @@
 # Earth Jukebox
 
-Listen to NASA's view of a changing planet. Earth Jukebox plays NASA Earth Information Center visualizations and turns their pixels into calm, live-generated music.
+Hear the planet change. Earth Jukebox plays NASA Earth Information Center visualizations and turns them into calm, live-generated sound.
 
 Built for the **NASA Space Apps Challenge 2026**, challenge: *The Earth Information Jukebox*.
+
+## The idea
+
+**Hear the planet change.** NASA's Earth Information Center shows a changing planet, but only to people who can see it. Earth Jukebox turns those visualizations into sound, so the change can be heard, and into a map you can explore by touch.
 
 ## How it works
 
 1. The page plays a NASA visualization video.
-2. About 12 times a second, the current frame is shrunk to 64 x 32 pixels and split into a 16 x 16 grid.
-3. Each cell is measured: brightness, colour (hue read as temperature, purple and orange read as light change), movement and bright points.
+2. About 12 times a second, the visible part of the frame is read and split into a 16 x 16 grid.
+3. Each cell is measured. What is measured depends on the data: water temperature from the colour scale, city light above the dark land, purple and orange for change, yellow points for lightning.
 4. Each track maps those numbers to sound with Tone.js. Every note snaps to a D major pentatonic scale, with slow attacks and long reverb, so the result stays calm.
-5. The "What you are hearing" panel shows live meters and explains each mapping in plain words.
+5. The page explains every mapping in a listening key and shows live readings.
 
-| Track | NASA source | Mapping |
+| Track | NASA source | What you hear |
 | --- | --- | --- |
-| Ocean Currents | [SVS 3912](https://svs.gsfc.nasa.gov/3912) | A scan line moves pole to pole. Water temperature on the line sets the chord; current movement sets brightness and bell count. |
-| Night Lights 2012 to 2023 | [SVS 5313](https://svs.gsfc.nasa.gov/5313) | A playhead sweeps west to east. Lit areas ring bells (north is higher). In the change map, purple (more light) rings high and orange (less light) rings low. |
-| Lightning from Space | [SVS 5011](https://svs.gsfc.nasa.gov/5011) | More lightning means more chimes. Pitch follows latitude, so the storm seasons are heard drifting north and south. |
+| Ocean currents | [SVS 3912](https://svs.gsfc.nasa.gov/3912) | A scan line moves pole to pole. Water temperature on the line sets the chord, low for cold and high for warm. Faster currents add bells. |
+| Night lights | [SVS 5313](https://svs.gsfc.nasa.gov/5313) | A playhead sweeps west to east. Lit regions ring bells, north is higher, and the drone swells as total light grows from 2012 to 2023. In the change map, new lights ring a bright high bell and lights that went out sound a low tone. |
+| Lightning from orbit | [SVS 5011](https://svs.gsfc.nasa.gov/5011) | Only detected lightning makes chimes: more lightning, more chimes. No lightning, no chimes. Pitch follows height on the globe. |
+
+### Honest reading of the frames
+
+- Labels and colour bars inside the NASA frames are masked so they never make sound.
+- NASA's wide night lights version repeats the world map; one full world is shown and read. Only the part before NASA's zoom boxes appear is used.
+- Lightning is detected by its yellow colour, so stars, labels and the white ISS track are not mistaken for it. The clip starts where lightning first appears.
+- Temperatures in explore mode are estimates read from the colour scale, and the page says so.
+
+## The dot Earth
+
+The drawing at the top of the page is not decoration. It is the NASA frame that is playing, redrawn live as fine dots: bright data makes dense dots and each dot keeps the colour of the data. When a note plays, a ring of dots spreads from the place on the map the note came from.
+
+## Explore by touch
+
+Press **Explore by touch** (or E). The music pauses and the map becomes touchable: move the mouse, a finger or the arrow keys across the grid and hear what is under you. Each place plays its own note and is described in words for screen readers, for example "Warm water, about 25 °C, estimated from the colour scale" or "New lights here since 2012". Freeze frame holds one moment to study it.
 
 ## Accessibility
 
-Full keyboard control (Space, arrow keys), screen-reader labels, a live region announcing the track, a text description of every visualization and visible focus. Works without seeing the screen.
+Full keyboard control (Space, E, arrow keys, Escape), screen-reader labels, a live region announcing each track with its description, a text description of every visualization and visible focus. Motion is reduced for people who ask their system for that.
 
 ## Run locally
 
@@ -34,4 +53,4 @@ Open the folder in VS Code and use the Live Server extension ("Go Live"). Openin
 
 ## AI use
 
-Code written with AI assistance (Claude Opus 5.5), directed and tuned by the team. All audio is generated live by an algorithm from NASA visualization frames. No audio, images or video in this project were made by generative AI.
+Code written with AI assistance (Claude Opus 5.5 and Claude Fable 5.2), directed and tuned by the team. All audio is generated live by an algorithm from NASA visualization frames. No audio, images or video in this project were made by generative AI.

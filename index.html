@@ -3,68 +3,84 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Earth Jukebox: hear NASA's view of a changing planet</title>
-  <meta name="description" content="Earth Jukebox turns NASA Earth Information Center visualizations into live, calm music generated from their pixels.">
-  <meta name="ai-disclosure" content="Code written with AI assistance (Claude Opus 5.5), directed and tuned by the team. All audio is generated live by an algorithm from NASA visualization frames. No audio, images or video were made by generative AI.">
+  <title>Earth Jukebox: hear the planet change</title>
+  <meta name="description" content="Earth Jukebox turns NASA Earth Information Center visualizations into live sound, so anyone can hear the planet change and explore it by touch.">
+  <meta name="ai-disclosure" content="Code written with AI assistance (Claude Opus 5.5 and Claude Fable 5.2), directed and tuned by the team. All audio is generated live by an algorithm from NASA visualization frames. No audio, images or video were made by generative AI.">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-track="ocean">
   <a class="skip" href="#player">Skip to player</a>
 
-  <header class="top">
-    <h1>Earth Jukebox</h1>
-    <p class="tagline">Listen to NASA's view of a changing planet. Every sound is generated live from the pixels of a NASA visualization.</p>
+  <header class="hero">
+    <canvas id="dots" class="dots" aria-hidden="true"></canvas>
+    <div class="wrap hero-text">
+      <h1>Earth Jukebox</h1>
+      <p class="lead">Hear the planet change.</p>
+      <p class="sub">NASA’s views of Earth, turned into live sound you can listen to and explore by touch.</p>
+    </div>
+    <p class="wrap hero-note">Drawn live from the NASA frame now playing. Dots light up where each note comes from.</p>
   </header>
 
-  <main>
-    <section class="picker" aria-labelledby="pick-h">
+  <main class="wrap">
+    <section aria-labelledby="pick-h">
       <h2 id="pick-h" class="sr-only">Choose a track</h2>
       <div id="tracks" class="tracks" role="group" aria-label="Tracks"></div>
     </section>
 
     <section id="player" class="player" aria-labelledby="now-title" tabindex="-1">
-      <div class="stage">
-        <video id="video" muted loop playsinline preload="auto" aria-describedby="now-desc"></video>
+      <div id="stage" class="stage" role="group" aria-label="NASA visualization. In explore mode, use the arrow keys to move around the map." tabindex="-1">
+        <video id="video" muted playsinline preload="auto" aria-describedby="now-desc"></video>
         <div id="playhead" class="playhead" hidden aria-hidden="true"></div>
+        <div id="cursor" class="cursor" hidden aria-hidden="true"></div>
       </div>
 
       <div class="controls">
-        <button id="play" class="play" type="button" aria-pressed="false">Play</button>
-        <label class="vol" for="volume">Volume</label>
-        <input id="volume" type="range" min="0" max="100" value="60">
-        <output id="volume-out" for="volume">60%</output>
+        <button id="play" class="btn btn-solid" type="button" aria-pressed="false">Play</button>
+        <button id="explore" class="btn" type="button" aria-pressed="false">Explore by touch</button>
+        <button id="freeze" class="btn btn-quiet" type="button" hidden>Freeze frame</button>
+        <span class="vol">
+          <label for="volume">Volume</label>
+          <input id="volume" type="range" min="0" max="100" value="60">
+          <output id="volume-out" for="volume">60%</output>
+        </span>
       </div>
-      <p class="hint">Keyboard: Space plays or pauses, Left and Right change track, Up and Down change volume.</p>
+      <p id="readout" class="readout" hidden></p>
       <p id="status" class="status" role="status"></p>
-
-      <h2 id="now-title" class="now-title"></h2>
-      <p id="now-desc" class="desc"></p>
-      <p class="credit"><span id="now-credit"></span> Source: <a id="now-source" href="#" target="_blank" rel="noopener"></a></p>
     </section>
 
-    <section class="panel" aria-labelledby="hear-h">
-      <h2 id="hear-h">What you are hearing</h2>
-      <ul id="legend" class="legend"></ul>
-      <div id="meters" class="meters"></div>
-      <figure class="sees">
-        <canvas id="sees" width="64" height="32" aria-hidden="true"></canvas>
-        <figcaption>What the jukebox sees: the frame shrunk to 64 by 32 pixels and read 12 times a second.</figcaption>
-      </figure>
+    <div class="columns">
+      <section class="label" aria-labelledby="now-title">
+        <h2 id="now-title"></h2>
+        <p id="now-desc" class="desc"></p>
+        <p class="credit"><span id="now-credit"></span><br>Source: <a id="now-source" href="#" target="_blank" rel="noopener"></a></p>
+      </section>
+
+      <section class="listen" aria-labelledby="hear-h">
+        <h2 id="hear-h" class="small-head">How to listen</h2>
+        <dl id="key" class="key"></dl>
+        <h3 class="small-head">Live readings</h3>
+        <div id="meters" class="meters"></div>
+      </section>
+    </div>
+
+    <section class="how" aria-labelledby="how-h">
+      <h2 id="how-h" class="small-head">Controls</h2>
+      <p>Space plays or pauses. Left and Right change track. Up and Down change volume. E turns on explore mode: move the mouse, a finger or the arrow keys across the map to hear each place and have it described. Escape returns to the music.</p>
     </section>
 
-    <details class="tuning-box">
-      <summary>Tuning (for the team)</summary>
+    <section id="tuning-box" class="tuning-box" hidden>
+      <h2 class="small-head">Tuning (team only)</h2>
       <div id="tuning"></div>
-      <button id="copyTune" type="button">Copy settings</button>
+      <button id="copyTune" class="btn" type="button">Copy settings</button>
       <textarea id="tuneOut" rows="8" hidden aria-label="Current settings"></textarea>
-    </details>
+    </section>
   </main>
 
-  <footer class="foot">
-    <p><strong>Earth Jukebox</strong> for the NASA Space Apps Challenge 2026, challenge: The Earth Information Jukebox.</p>
-    <p>Visualizations by NASA's Scientific Visualization Studio, from the Earth Information Center collection. NASA does not endorse this project.</p>
-    <p><strong>AI use:</strong> Code written with AI assistance (Claude Opus 5.5), directed and tuned by the team. All audio is generated live by an algorithm from NASA visualization frames. No audio, images or video in this project were made by generative AI.</p>
-    <p>Sound engine: <a href="https://tonejs.github.io/" target="_blank" rel="noopener">Tone.js</a> (MIT License).</p>
+  <footer class="wrap foot">
+    <p>Earth Jukebox was made for the NASA Space Apps Challenge 2026, challenge “The Earth Information Jukebox”.</p>
+    <p>Visualizations by NASA’s Scientific Visualization Studio, from the Earth Information Center collection. NASA does not endorse this project.</p>
+    <p>AI use: code written with AI assistance (Claude Opus 5.5 and Claude Fable 5.2), directed and tuned by the team. All audio is generated live by an algorithm from NASA visualization frames. No audio, images or video in this project were made by generative AI.</p>
+    <p>Sound engine: <a href="https://tonejs.github.io/" target="_blank" rel="noopener">Tone.js</a>, MIT License.</p>
   </footer>
 
   <div id="live" class="sr-only" aria-live="polite"></div>

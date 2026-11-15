@@ -1,10 +1,11 @@
-// Frame analyzer: shrinks the current video frame onto a small canvas,
+// Frame analyzer: reads the visible part of the current video frame,
 // splits it into a 16 x 16 grid and measures each cell 12 times a second.
 
 export const GX = 16;
 export const GY = 16;
 const KEYS = ['lum', 'temp', 'sat', 'motion', 'purple', 'orange', 'density'];
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const LAND_GREY = 0.15; // night lights: anything darker than this is unlit land or sea
 
 function hueOf(r, g, b, max, min) {
   const d = max - min;
@@ -20,8 +21,6 @@ function hueOf(r, g, b, max, min) {
 export class Analyzer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.w = canvas.width;
-    this.h = canvas.height;
     this.ctx = canvas.getContext('2d', { willReadFrequently: true });
     this.reset();
   }
@@ -29,16 +28,49 @@ export class Analyzer {
   reset() {
     this.prevLum = null;
     this.state = null; // smoothed cell values
+    this.mask = null;
+    this.maskFor = null;
   }
 
-  sample(video, track) {
+  // Mark pixels inside the track's "ignore" areas so they are never read.
+  buildMask(track, w, h) {
+    const mask = new Uint8Array(w * h);
+    for (const r of track.ignore || []) {
+      const x0 = Math.floor(r.x * w), x1 = Math.ceil((r.x + r.w) * w);
+      const y0 = Math.floor(r.y * h), y1 = Math.ceil((r.y + r.h) * h);
+      for (let y = y0; y < Math.min(h, y1); y++) for (let x = x0; x < Math.min(w, x1); x++) mask[y * w + x] = 1;
+    }
+    this.mask = mask;
+    this.maskFor = track.id;
+  }
+
+  // Draw the track's view of the frame at sample size and return the pixels.
+  read(video, track) {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (!vw || !vh) return null;
-    const { w, h, ctx } = this;
-    const crop = track.crop || { x: 0, y: 0, w: 1, h: 1 };
-    ctx.drawImage(video, crop.x * vw, crop.y * vh, crop.w * vw, crop.h * vh, 0, 0, w, h);
-    const px = ctx.getImageData(0, 0, w, h).data;
+    const [w, h] = track.res;
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+      this.prevLum = null;
+    }
+    const v = track.view;
+    this.ctx.imageSmoothingQuality = 'high';
+    this.ctx.drawImage(video, v.x * vw, v.y * vh, v.w * vw, v.h * vh, 0, 0, w, h);
+    return this.ctx.getImageData(0, 0, w, h).data;
+  }
+
+  sample(video, track) {
+    const px = this.read(video, track);
+    return px ? this.measure(px, track) : null;
+  }
+
+  measure(px, track) {
+    const [w, h] = track.res;
+    if (this.maskFor !== track.id || !this.mask || this.mask.length !== w * h) this.buildMask(track, w, h);
+    const mask = this.mask;
+    const detect = track.detect;
 
     const n = GX * GY;
     const raw = {};
@@ -46,39 +78,46 @@ export class Analyzer {
     const count = new Float32Array(n);
     const tempCount = new Float32Array(n);
     const lumNow = new Float32Array(w * h);
-    const thresh = track.tune.thresh ?? 0.5;
-    const prev = this.prevLum;
+    const prev = this.prevLum && this.prevLum.length === w * h ? this.prevLum : null;
 
     for (let y = 0; y < h; y++) {
       const rowBase = Math.floor((y * GY) / h) * GX;
       for (let x = 0; x < w; x++) {
         const p = y * w + x;
+        const cell = rowBase + Math.floor((x * GX) / w);
+        count[cell]++;
+        if (mask[p]) continue;
         const i = p * 4;
         const r = px[i] / 255;
         const g = px[i + 1] / 255;
         const b = px[i + 2] / 255;
         const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         lumNow[p] = l;
-        const cell = rowBase + Math.floor((x * GX) / w);
-        count[cell]++;
         raw.lum[cell] += l;
-        if (l > thresh) raw.density[cell]++;
         if (prev) raw.motion[cell] += Math.abs(l - prev[p]);
-
-        // Colour: hue tells temperature (blue cold to red warm) and purple/orange change.
         const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        const sat = max > 0 ? (max - min) / max : 0;
-        if (sat > 0.35 && max > 0.2) {
-          const hue = hueOf(r, g, b, max, min);
-          raw.sat[cell]++;
-          const hh = hue >= 330 ? hue - 360 : hue; // reds just below 360 count as warm
-          if (hh <= 260) {
-            raw.temp[cell] += clamp01((240 - hh) / 240);
-            tempCount[cell]++;
+
+        if (detect === 'ocean') {
+          // Hue is temperature: blue (cold) through green and yellow to red (hot).
+          const min = Math.min(r, g, b);
+          const sat = max > 0 ? (max - min) / max : 0;
+          if (sat > 0.35 && max > 0.2) {
+            const hue = hueOf(r, g, b, max, min);
+            raw.sat[cell]++;
+            const hh = hue >= 330 ? hue - 360 : hue;
+            if (hh <= 260) {
+              raw.temp[cell] += clamp01((240 - hh) / 240);
+              tempCount[cell]++;
+            }
           }
-          if (hue >= 255 && hue <= 320 && max > 0.25) raw.purple[cell]++;
-          if (hue >= 15 && hue <= 50 && sat > 0.45 && max > 0.35) raw.orange[cell]++;
+        } else if (detect === 'lights') {
+          // Light is anything brighter than the grey land. Purple and orange mark change.
+          if (max > LAND_GREY) raw.density[cell] += max - LAND_GREY;
+          if (b > r * 1.1 && b > g * 1.1 && max > 0.15) raw.purple[cell]++;
+          else if (r > b * 1.6 && g > b * 1.15 && max > 0.18) raw.orange[cell]++;
+        } else if (detect === 'yellow') {
+          // Lightning points are yellow. Stars, labels and the ISS track are white and are skipped.
+          if (r > 0.3 && g > 0.2 && r - b > 0.12 && b < 0.8 * r) raw.density[cell]++;
         }
       }
     }
@@ -117,12 +156,15 @@ function summarize(cells) {
   const rows = Array.from({ length: GY }, blank);
   const cols = Array.from({ length: GX }, blank);
   const all = blank();
+  let px = 0, pw = 0;
   for (let r = 0; r < GY; r++) {
     for (let c = 0; c < GX; c++) {
       const i = r * GX + c;
       add(rows[r], cells, i, c / (GX - 1)); // row: position west (0) to east (1)
       add(cols[c], cells, i, r / (GY - 1)); // column: position north (0) to south (1)
       add(all, cells, i, r / (GY - 1));
+      px += cells.density[i] * (c / (GX - 1));
+      pw += cells.density[i];
     }
   }
   rows.forEach((o) => finish(o, GX));
@@ -132,7 +174,7 @@ function summarize(cells) {
     cells, rows, cols,
     lum: all.lum, sat: all.sat, motion: all.motion, density: all.density,
     purple: all.purple, orange: all.orange, temp: all.temp,
-    posY: all.pos, posYD: all.posD,
+    posY: all.pos, posYD: all.posD, posXD: pw > 0 ? px / pw : 0.5,
   };
 }
 
@@ -157,5 +199,5 @@ function finish(o, k) {
   o.lum /= k; o.sat /= k; o.motion /= k; o.density /= k; o.purple /= k; o.orange /= k;
   o.temp = o.tW > 0 ? o.tSum / o.tW : 0.5;
   o.pos = o.wL > 0 ? o.pL / o.wL : 0.5;  // brightness-weighted position
-  o.posD = o.wD > 0 ? o.pD / o.wD : 0.5; // position weighted by bright points
+  o.posD = o.wD > 0 ? o.pD / o.wD : 0.5; // position weighted by the detected signal
 }

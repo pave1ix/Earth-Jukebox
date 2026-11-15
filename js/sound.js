@@ -9,6 +9,11 @@ for (let o = 0; o < 5; o++) for (const d of DEGREES) SCALE.push(ROOT + 12 * o + 
 const D3 = 5;  // index of D3 in SCALE
 const D4 = 10; // index of D4 in SCALE
 const MAX_NOTES_PER_SEC = 4;
+// Fixed reference levels, measured on these NASA clips, so meters and loudness show real change.
+const LIGHT_MIN = 0.0005;      // night lights: total light that reads as empty
+const LIGHT_FULL = 0.00097;    // night lights: total light that reads as full
+const CHANGE_FULL = 0.003;     // night lights: share of the map that reads as full change
+const LIGHTNING_FULL = 0.002;  // lightning: share of the view that reads as full
 const BASE = { pad: -16, bell: -14, soft: -12, drone: -22 }; // dB before tuning offsets
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -133,13 +138,14 @@ export class SoundEngine {
     this.s = {
       timer: 0, row: 0, dir: 1, col: -1, acc: 0, chord: -1, chordAt: -99,
       temp: 0.5, m: 0, d: 0, g: 0,
-      motionN: new Norm(0.004), lumN: new Norm(0.03), glumN: new Norm(0.02),
-      denN: new Norm(0.002), purN: new Norm(0.005), oraN: new Norm(0.005),
+      lat: 0.5, side: 0.5,
+      motionN: new Norm(0.004), colN: new Norm(0.0002),
     };
     this.applyTune(track.tune);
     const now = Tone.now();
     this.filter.frequency.cancelScheduledValues(now);
-    this.filter.frequency.setValueAtTime(1500, now);
+    this.filter.frequency.setValueAtTime(this.explore ? 2600 : 1500, now);
+    if (this.explore) return; // explore mode: no drones or pads, only hovered spots
     if (track.id === 'lightning') {
       this.drone.triggerAttack(note(0), now + 0.05);
       this.pad.triggerAttack([note(D3), note(D3 + 2), note(D3 + 4)], now + 0.05, 0.25);
@@ -150,26 +156,55 @@ export class SoundEngine {
 
   // ---------- notes ----------
   canPlay(now) {
+    const limit = this.explore ? 10 : MAX_NOTES_PER_SEC;
     this.noteTimes = this.noteTimes.filter((x) => now - x < 1);
-    if (this.noteTimes.length >= MAX_NOTES_PER_SEC) return false;
+    if (this.noteTimes.length >= limit) return false;
     this.noteTimes.push(now);
     return true;
   }
 
-  bellAt(i, time, vel, pan) {
+  // loc = where on the map the note comes from: { u: 0 west .. 1 east, v: 0 north .. 1 south }
+  bellAt(i, time, vel, pan, loc) {
     if (!this.canPlay(Tone.now())) return;
     this.bellPan.pan.rampTo(pan, 0.05, time);
     this.bell.triggerAttackRelease(note(i), 0.3, time, clamp(vel, 0.05, 1));
+    if (this.onNote && loc) this.onNote(loc, vel);
   }
 
-  softAt(i, time, vel, pan) {
+  softAt(i, time, vel, pan, loc) {
     if (!this.canPlay(Tone.now())) return;
     this.softPan.pan.rampTo(pan, 0.05, time);
     this.soft.triggerAttackRelease(note(i), 0.5, time, clamp(vel, 0.05, 1));
+    if (this.onNote && loc) this.onNote(loc, vel);
+  }
+
+  // ---------- explore mode ----------
+  // While exploring, the automatic music stops and only the hovered spot sounds.
+  setExplore(on) {
+    if (!this.ready) return;
+    this.explore = on;
+    this.stopAll();
+    this.noteTimes = [];
+    const now = Tone.now();
+    this.filter.frequency.cancelScheduledValues(now);
+    this.filter.frequency.setValueAtTime(on ? 2600 : 1500, now);
+    if (!on && this.track) this.setTrack(this.track);
+  }
+
+  // sound = { kind: 'bell' | 'soft' | 'none', idx, vel, count }
+  playExplore(sound, pan, loc) {
+    if (!this.ready || !this.explore || !sound || sound.kind === 'none') return;
+    const now = Tone.now() + 0.01;
+    const count = Math.max(1, sound.count || 1);
+    for (let k = 0; k < count; k++) {
+      const time = now + k * 0.09;
+      if (sound.kind === 'soft') this.softAt(sound.idx, time, sound.vel, pan, loc);
+      else this.bellAt(sound.idx + (k % 2) * 2, time, sound.vel, pan, k === 0 ? loc : null);
+    }
   }
 
   update(f, dt) {
-    if (!this.ready || !this.track) return { meters: {}, playhead: null };
+    if (!this.ready || !this.track || this.explore) return { meters: {}, playhead: null };
     const now = Tone.now();
     if (this.track.id === 'ocean') return this.ocean(f, dt, now);
     if (this.track.id === 'nightlights') return this.nightlights(f, dt, now);
@@ -203,7 +238,8 @@ export class SoundEngine {
         for (let k = 0; k < count; k++) {
           const c = pickWeighted(weights);
           const idx = Math.max(s.chord, D3) + 5 + [0, 2, 4, 1, 3][Math.floor(Math.random() * 5)];
-          this.bellAt(idx, now + 0.06 + k * 0.14 + Math.random() * 0.05, 0.25 + 0.35 * s.m, panOf(c, 16, 0.75));
+          this.bellAt(idx, now + 0.06 + k * 0.14 + Math.random() * 0.05, 0.25 + 0.35 * s.m,
+            panOf(c, 16, 0.75), { u: (c + 0.5) / 16, v: (s.row + 0.5) / 16 });
         }
         this.filter.frequency.rampTo(450 + 2800 * s.m, 0.6);
       }
@@ -215,53 +251,63 @@ export class SoundEngine {
   }
 
   // Night lights: a playhead sweeps west to east. Lit columns ring bells;
-  // in the change map, purple (more light) rings high and orange (less light) rings low.
+  // in the change map, purple (new lights) rings high and orange (lights out) rings low.
   nightlights(f, dt, now) {
     const s = this.s;
     const t = this.track.tune;
-    s.g = s.glumN.norm(f.lum);
-    this.droneVol.volume.rampTo(BASE.drone + (t.drone || 0) - 10 + 10 * s.g, 0.5);
+    s.g = clamp((f.density - LIGHT_MIN) / (LIGHT_FULL - LIGHT_MIN), 0, 1); // fixed scale, so growth from 2012 to 2023 is audible
+    const changeMode = f.purple > 0.0004;
+    this.droneVol.volume.rampTo(BASE.drone + (t.drone || 0) - 12 + 12 * s.g, 0.5);
     s.timer += dt;
     if (s.timer >= t.step) {
       s.timer = 0;
       s.col = (s.col + 1) % 16;
       const col = f.cols[s.col];
-      const bn = s.lumN.norm(col.lum);
+      const bn = s.colN.norm(col.density);
       if (bn > t.gate) {
-        const idx = D4 + Math.round((1 - col.pos) * 9);
-        const changeMode = f.purple > 0.006;
+        const idx = D4 + Math.round((1 - col.posD) * 9);
         const pan = panOf(s.col, 16, 0.8);
         const vel = 0.2 + 0.5 * bn;
-        if (changeMode && col.orange > col.purple * 1.2 && col.orange > 0.01) this.softAt(idx - 5, now + 0.02, vel + 0.1, pan);
-        else if (changeMode && col.purple > col.orange * 1.2 && col.purple > 0.01) this.bellAt(idx + 2, now + 0.02, vel, pan);
-        else this.bellAt(idx, now + 0.02, vel * 0.9, pan);
+        const loc = { u: (s.col + 0.5) / 16, v: col.posD };
+        if (changeMode && col.purple > 0.0003) this.bellAt(idx + 2, now + 0.02, vel, pan, loc);
+        else this.bellAt(idx, now + 0.02, vel * 0.9, pan, loc);
+        if (changeMode && col.orange > 0.0002 && col.orange > col.purple * 0.15) {
+          this.softAt(idx - 5, now + 0.16, vel + 0.1, pan, loc);
+        }
       }
     }
     return {
-      meters: { brightness: s.g, more: s.purN.norm(f.purple), less: s.oraN.norm(f.orange) },
+      meters: {
+        total: s.g,
+        more: changeMode ? clamp(f.purple / CHANGE_FULL, 0, 1) : 0, // same scale for both,
+        less: changeMode ? clamp(f.orange / CHANGE_FULL, 0, 1) : 0, // so they can be compared
+      },
       playhead: { axis: 'x', pos: (Math.max(s.col, 0) + 0.5) / 16 },
     };
   }
 
-  // Lightning: more lightning on screen means more chimes.
-  // Chime pitch follows latitude, pan follows longitude.
+  // Lightning: only detected lightning makes chimes. No lightning, no chimes.
+  // Pitch follows height on the globe, pan follows left to right.
   lightning(f, dt, now) {
     const s = this.s;
     const t = this.track.tune;
-    const d = s.denN.norm(f.density);
-    s.d += 0.2 * (d - s.d);
-    s.g = s.glumN.norm(f.lum);
-    const rate = Math.min(MAX_NOTES_PER_SEC, (0.15 + 3.2 * s.d) * t.rate);
-    s.acc += rate * dt;
+    const present = f.density > 0.00003;
+    const d = present ? clamp(f.density / LIGHTNING_FULL, 0, 1) : 0; // fixed scale: more lightning, more chimes
+    s.d += 0.25 * (d - s.d);
+    if (present) { s.lat = 1 - f.posYD; s.side = f.posXD; }
+    const rate = Math.min(MAX_NOTES_PER_SEC, 3.4 * s.d * t.rate);
+    s.acc = Math.min(2, s.acc + rate * dt);
     while (s.acc >= 1) {
       s.acc -= 1;
+      if (!present) break;
       const c = pickWeighted(f.cols.map((x) => x.density));
-      const idx = D4 + Math.round((1 - f.cols[c].posD) * 9);
-      this.bellAt(idx, now + Math.random() * 0.08, 0.2 + 0.3 * s.d * Math.random() + 0.1, panOf(c, 16, 0.85));
+      const v = f.cols[c].posD;
+      const idx = D4 + Math.round((1 - v) * 9);
+      this.bellAt(idx, now + Math.random() * 0.08, 0.25 + 0.3 * s.d, panOf(c, 16, 0.85), { u: (c + 0.5) / 16, v });
     }
     this.filter.frequency.rampTo(500 + 2000 * s.d, 0.8);
     return {
-      meters: { density: s.d, latitude: 1 - f.posYD, brightness: s.g },
+      meters: { density: s.d, latitude: s.lat, side: s.side },
       playhead: null,
     };
   }
