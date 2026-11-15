@@ -2,22 +2,12 @@
 // Every description is read from the pixels; temperatures are estimated from the colour scale.
 
 import { GX, GY } from './analyzer.js';
+import { tempC } from './tracks.js';
 
 const D3 = 5;
 const D4 = 10;
 
-// Ocean colour bar (NASA SVS 3912): blue 0 °C, green 10 to 20 °C, yellow about 25 °C, red 32 °C.
-function tempC(t) {
-  const pts = [[0, 0], [0.5, 15], [0.75, 25], [1, 32]];
-  for (let i = 1; i < pts.length; i++) {
-    const [x0, y0] = pts[i - 1];
-    const [x1, y1] = pts[i];
-    if (t <= x1) return y0 + ((t - x0) / (x1 - x0)) * (y1 - y0);
-  }
-  return 32;
-}
-
-function area(r, c) {
+export function area(r, c) {
   const v = r < 5 ? 'Top' : r < 11 ? 'Middle' : 'Bottom';
   const h = c < 5 ? 'left' : c < 11 ? 'centre' : 'right';
   return v === 'Middle' && h === 'centre' ? 'Centre' : `${v} ${h}`;
@@ -65,6 +55,14 @@ export function describeCell(trackId, f, r, c) {
     if (light < 0.00005 || bn < 0.04) return { text: `${where} Dark. Few or no lights.`, sound: { kind: 'none' } };
     const word = bn < 0.3 ? 'Some lights.' : bn < 0.65 ? 'Bright lights.' : 'Among the brightest places on Earth at night.';
     return { text: `${where} ${word}`, sound: { kind: 'bell', idx: D3 + Math.round(bn * 12), vel: 0.25 + 0.55 * bn } };
+  }
+
+  if (trackId === 'co2') {
+    const d = cells.density[i];
+    if (d < 0.01) return { text: `${where} Little or no thick carbon dioxide here.`, sound: { kind: 'none' } };
+    const dn = d / maxOf(cells.density);
+    const word = dn < 0.35 ? 'Some thick carbon dioxide.' : dn < 0.7 ? 'Thick carbon dioxide.' : 'Among the thickest carbon dioxide on the map.';
+    return { text: `${where} ${word}`, sound: { kind: 'soft', idx: D3 + 1 + Math.round((1 - r / (GY - 1)) * 9), vel: 0.35 + 0.45 * dn } };
   }
 
   // lightning

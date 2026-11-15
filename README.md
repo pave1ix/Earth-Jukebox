@@ -37,6 +37,13 @@ The drawing at the top of the page is not decoration. It is the NASA frame that 
 
 Press **Explore by touch** (or E). The music pauses and the map becomes touchable: move the mouse, a finger or the arrow keys across the grid and hear what is under you. Each place plays its own note and is described in words for screen readers, for example "Warm water, about 25 °C, estimated from the colour scale" or "New lights here since 2012". Freeze frame holds one moment to study it.
 
+## Describe, key and read aloud
+
+- **Describe this moment** (D) says in one or two sentences what is on screen right now, built only from the numbers read off the frame, for example "Warmest water: about 29 °C, around 6° S" or "New lights cover about 10 times as much of the map as lights that went out".
+- **Hear the key** (K) plays each sound of the current track with a sentence explaining what it means, so a listener learns the mapping before listening.
+- **Read aloud** (R) speaks every description with the browser's own voice, for people who do not use a screen reader.
+- Every live reading shows its value in words or units (°C, latitude, left or right), and each track lists how it reads the data and what its limits are.
+
 ## Accessibility
 
 Full keyboard control (Space, E, arrow keys, Escape), screen-reader labels, a live region announcing each track with its description, a text description of every visualization and visible focus. Motion is reduced for people who ask their system for that.

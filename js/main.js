@@ -5,6 +5,7 @@ import { Analyzer, GX, GY } from './analyzer.js';
 import { SoundEngine } from './sound.js';
 import { describeCell } from './explore.js';
 import { DotEarth } from './dotearth.js';
+import { describeMoment } from './describe.js';
 
 const $ = (id) => document.getElementById(id);
 const video = $('video');
@@ -17,6 +18,9 @@ const playhead = $('playhead');
 const cursor = $('cursor');
 const statusEl = $('status');
 const readout = $('readout');
+const describeBtn = $('describe');
+const keyBtn = $('hearkey');
+const speakBtn = $('speak');
 const TUNING = new URLSearchParams(location.search).has('tune');
 
 const analyzer = new Analyzer(document.createElement('canvas'));
@@ -34,6 +38,10 @@ let meterRefs = {};
 let lastFrame = null;
 let cell = { r: 7, c: 7 };
 let announceTimer = null;
+let speakOn = false;    // read descriptions aloud with the browser's own voice
+let keyToken = 0;       // cancels a running listening key
+let keyRunning = false;
+const keyHeard = new Set(); // tracks whose key has been played once
 let userPaused = false; // true after the listener presses Pause
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -47,12 +55,21 @@ function buildTrackButtons() {
     const b = document.createElement('button');
     b.className = 'track';
     b.type = 'button';
-    b.setAttribute('aria-pressed', 'false');
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', 'false');
     b.innerHTML = `<span class="track-code" aria-hidden="true">${t.code}</span>
       <span class="track-title">${t.title}</span>
       <span class="track-line">${t.line}</span>`;
     b.addEventListener('click', () => selectTrack(i));
     wrap.appendChild(b);
+  });
+  // Arrow keys move between tracks inside the group, like any radio group.
+  wrap.addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    e.stopPropagation();
+    selectTrack(current + step).then(() => wrap.children[current].focus());
   });
 }
 
@@ -85,7 +102,10 @@ function loadTrack(i) {
   const src = $('now-source');
   src.href = t.source;
   src.textContent = t.source.replace('https://', '');
-  document.querySelectorAll('.track').forEach((b, j) => b.setAttribute('aria-pressed', String(j === current)));
+  document.querySelectorAll('.track').forEach((b, j) => {
+    b.setAttribute('aria-checked', String(j === current));
+    b.tabIndex = j === current ? 0 : -1;
+  });
 
   $('key').innerHTML = t.key.map((k) => {
     const sw = k.swatch === 'line' ? '<span class="swatch swatch-line"></span>'
@@ -101,10 +121,12 @@ function loadTrack(i) {
     const row = document.createElement('div');
     row.className = 'meter';
     row.innerHTML = `<span class="meter-label">${m.label}</span>
-      <div class="meter-bar" role="meter" aria-label="${m.label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>`;
+      <div class="meter-bar" role="meter" aria-label="${m.label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+      <span class="meter-val" aria-hidden="true">–</span>`;
     meters.appendChild(row);
-    meterRefs[m.key] = row.querySelector('.meter-bar');
+    meterRefs[m.key] = { bar: row.querySelector('.meter-bar'), val: row.querySelector('.meter-val'), fmt: m.fmt };
   }
+  $('method').innerHTML = (t.method || []).map((x) => `<li>${x}</li>`).join('');
   playhead.hidden = true;
   if (TUNING) buildTuning();
 }
@@ -178,10 +200,12 @@ async function startPlayback() {
 async function togglePlay() {
   if (busy) return;
   busy = true;
+  let started = false;
   try {
     if (!playing) {
       await startPlayback();
-      announce(`Playing ${TRACKS[current].title}`);
+      started = true;
+      announce(`Playing ${TRACKS[current].title}.`);
     } else {
       if (exploring) setExplore(false);
       playing = false;
@@ -199,6 +223,7 @@ async function togglePlay() {
     busy = false;
     updateButtons();
   }
+  if (started && !keyHeard.has(TRACKS[current].id)) playKey(true);
 }
 
 async function selectTrack(i) {
@@ -209,8 +234,10 @@ async function selectTrack(i) {
       await sound.fadeOut(0.35);
       sound.stopAll();
     }
+    if (keyRunning) { keyToken++; keyRunning = false; if (!exploring) sound.setExplore(false); }
     loadTrack(i);
     if (exploring) placeCursor();
+    else readout.hidden = true;
     if (playing) {
       await video.play();
       video.playbackRate = TRACKS[current].rate || 1;
@@ -224,6 +251,10 @@ async function selectTrack(i) {
   } finally {
     busy = false;
     updateButtons();
+  }
+  // The first time a track plays, explain its sounds before the music.
+  if (playing && !exploring && !keyHeard.has(TRACKS[current].id)) {
+    setTimeout(() => { if (playing && !keyRunning && !keyHeard.has(TRACKS[current].id)) playKey(true); }, 2500);
   }
 }
 
@@ -243,6 +274,9 @@ function setExplore(on) {
   sound.setExplore(on);
   document.body.classList.toggle('is-exploring', on);
   stage.setAttribute('tabindex', on ? '0' : '-1');
+  // role application lets screen readers pass the arrow keys through to the map
+  stage.setAttribute('role', on ? 'application' : 'group');
+  stage.setAttribute('aria-label', on ? 'Map explorer. Arrow keys move one square. Enter repeats. Escape leaves.' : 'NASA visualization');
   cursor.hidden = !on;
   readout.hidden = !on;
   if (on) {
@@ -276,7 +310,7 @@ function exploreAt(r, c, fromKeys) {
   sound.playExplore(d.sound, ((c / (GX - 1)) * 2 - 1) * 0.8, { u: (c + 0.5) / GX, v: (r + 0.5) / GY });
   readout.textContent = d.text;
   clearTimeout(announceTimer);
-  announceTimer = setTimeout(() => announce(d.text), fromKeys ? 0 : 350); // pointer: speak after a short rest
+  announceTimer = setTimeout(() => { announce(d.text); speak(d.text); }, fromKeys ? 0 : 350); // pointer: speak after a short rest
 }
 
 stage.addEventListener('pointermove', (e) => {
@@ -312,6 +346,83 @@ function toggleFreeze() {
   updateButtons();
 }
 
+// ---------- describe, listening key, read aloud ----------
+function speak(text) {
+  if (!speakOn || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.05;
+  window.speechSynthesis.speak(u);
+}
+
+function say(text) {
+  readout.hidden = false;
+  readout.textContent = text;
+  announce(text);
+  speak(text);
+}
+
+// Describe what is on screen right now, from the numbers read off the current frame.
+function describeNow() {
+  const f = video.readyState >= 2 ? analyzer.sample(video, TRACKS[current]) : lastFrame;
+  if (f) lastFrame = f;
+  say(describeMoment(TRACKS[current].id, lastFrame));
+}
+
+// Play each sound of the current track's key with a sentence that explains it.
+// intro = played automatically before the music the first time a track is heard.
+async function playKey(intro = false) {
+  if (keyRunning) { stopKey(); return; }
+  if (busy) return;
+  const token = ++keyToken;
+  if (!playing) {
+    busy = true;
+    try { await startPlayback(); } catch (e) { setStatus(`Could not start: ${e.message}`); busy = false; return; }
+    busy = false;
+  }
+  const t = TRACKS[current];
+  keyHeard.add(t.id);
+  keyRunning = true;
+  updateButtons();
+  if (!exploring) sound.setExplore(true);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  if (intro) {
+    say(`Before the music, here is what each sound means in ${t.title}. Press Escape to skip.`);
+    await wait(4200);
+  }
+  for (const step of t.keySteps || []) {
+    if (token !== keyToken) break;
+    say(step.text);
+    await wait(intro ? 2600 : 450);
+    if (token !== keyToken) break;
+    sound.playExplore(step.sound, 0, null);
+    await wait(2600);
+  }
+  if (token === keyToken) {
+    keyRunning = false;
+    updateButtons();
+    if (!exploring) {
+      sound.setExplore(false);
+      say(intro ? 'Now the music. Press Describe this moment at any time for a summary in words.' : 'That is the key. The music continues.');
+    }
+  }
+}
+
+function stopKey() {
+  keyToken++;
+  keyRunning = false;
+  updateButtons();
+  if (!exploring && playing) sound.setExplore(false);
+  say('Key skipped. The music continues.');
+}
+
+function toggleSpeak() {
+  speakOn = !speakOn;
+  if (!speakOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  speakBtn.textContent = speakOn ? 'Read aloud: on' : 'Read aloud: off';
+  announce(speakOn ? 'Descriptions will be read aloud.' : 'Read aloud off.');
+}
+
 // ---------- analysis loop ----------
 function startLoop() {
   stopLoop();
@@ -342,10 +453,15 @@ function tick() {
 
 function renderMeters(values) {
   tickCount++;
-  for (const [key, el] of Object.entries(meterRefs)) {
-    const v = Math.round(Math.max(0, Math.min(1, values[key] ?? 0)) * 100);
-    el.firstElementChild.style.width = `${v}%`;
-    if (tickCount % 12 === 0) el.setAttribute('aria-valuenow', String(v));
+  for (const [key, ref] of Object.entries(meterRefs)) {
+    const raw = Math.max(0, Math.min(1, values[key] ?? 0));
+    const v = Math.round(raw * 100);
+    ref.bar.firstElementChild.style.width = `${v}%`;
+    if (tickCount % 4 === 0 && ref.fmt) ref.val.textContent = ref.fmt(raw);
+    if (tickCount % 12 === 0) {
+      ref.bar.setAttribute('aria-valuenow', String(v));
+      if (ref.fmt) ref.bar.setAttribute('aria-valuetext', ref.fmt(raw));
+    }
   }
 }
 
@@ -372,6 +488,8 @@ function updateButtons() {
   exploreBtn.textContent = exploring ? 'Back to listening' : 'Explore by touch';
   exploreBtn.setAttribute('aria-pressed', String(exploring));
   freezeBtn.hidden = !exploring;
+  keyBtn.textContent = keyRunning ? 'Stop the key' : 'Hear the key';
+  keyBtn.setAttribute('aria-pressed', String(keyRunning));
   freezeBtn.textContent = video.paused ? 'Resume video' : 'Freeze frame';
 }
 
@@ -384,6 +502,10 @@ function changeVolume(delta) {
 playBtn.addEventListener('click', togglePlay);
 exploreBtn.addEventListener('click', toggleExplore);
 freezeBtn.addEventListener('click', toggleFreeze);
+describeBtn.addEventListener('click', describeNow);
+keyBtn.addEventListener('click', () => playKey(false));
+speakBtn.addEventListener('click', toggleSpeak);
+if (!('speechSynthesis' in window)) speakBtn.hidden = true;
 
 volume.addEventListener('input', () => {
   sound.setVolume(Number(volume.value));
@@ -399,8 +521,12 @@ document.addEventListener('keydown', (e) => {
   const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
   const onControl = tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY';
   if (inField || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape' && keyRunning) { stopKey(); return; }
   if (e.key === ' ' && !onControl) { e.preventDefault(); togglePlay(); }
   else if (e.key === 'e' || e.key === 'E') { toggleExplore(); }
+  else if (e.key === 'd' || e.key === 'D') { describeNow(); }
+  else if (e.key === 'k' || e.key === 'K') { playKey(false); }
+  else if (e.key === 'r' || e.key === 'R') { toggleSpeak(); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); selectTrack(current + 1); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); selectTrack(current - 1); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); changeVolume(5); }

@@ -115,6 +115,11 @@ export class Analyzer {
           if (max > LAND_GREY) raw.density[cell] += max - LAND_GREY;
           if (b > r * 1.1 && b > g * 1.1 && max > 0.15) raw.purple[cell]++;
           else if (r > b * 1.6 && g > b * 1.15 && max > 0.18) raw.orange[cell]++;
+        } else if (detect === 'orange') {
+          // CO2 plumes are drawn in saturated orange. Snow, deserts and haze are pale and are skipped.
+          const min = Math.min(r, g, b);
+          const sat = max > 0 ? (max - min) / max : 0;
+          if (sat > 0.5 && max > 0.45 && hueOf(r, g, b, max, min) < 38) raw.density[cell]++;
         } else if (detect === 'yellow') {
           // Lightning points are yellow. Stars, labels and the ISS track are white and are skipped.
           if (r > 0.3 && g > 0.2 && r - b > 0.12 && b < 0.8 * r) raw.density[cell]++;

@@ -34,13 +34,13 @@ a:hover { color: var(--accent); }
 .hero { position: relative; height: clamp(320px, 44vw, 540px); overflow: hidden; }
 .dots {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  image-rendering: pixelated; opacity: 0.72;
+  image-rendering: pixelated; opacity: 0.66;
 }
 .hero::after { /* fades the drawing into the page and keeps the title readable */
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background:
     linear-gradient(to top, var(--bg) 0%, rgba(10, 10, 10, 0) 38%),
-    linear-gradient(to right, rgba(10, 10, 10, 0.82) 0%, rgba(10, 10, 10, 0) 58%);
+    linear-gradient(to right, rgba(10, 10, 10, 0.9) 0%, rgba(10, 10, 10, 0.55) 38%, rgba(10, 10, 10, 0) 72%);
 }
 .hero-text { position: absolute; left: 0; right: 0; bottom: 56px; z-index: 1; }
 .hero h1 {
@@ -55,16 +55,16 @@ a:hover { color: var(--accent); }
 }
 
 /* ---------- Track selector ---------- */
-.tracks { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--rule); margin-top: 8px; }
+.tracks { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule); margin-top: 8px; }
 .track {
   text-align: left; cursor: pointer; background: none; border: 0; color: var(--muted); font: inherit;
   padding: 18px 20px 20px 0; border-top: 2px solid transparent; margin-top: -1px;
 }
 .track + .track { padding-left: 20px; border-left: 1px solid var(--rule); }
 .track:hover { color: var(--text); }
-.track[aria-pressed="true"] { color: var(--text); border-top-color: var(--accent); }
+.track[aria-checked="true"] { color: var(--text); border-top-color: var(--accent); }
 .track-code { display: block; font: 0.78rem/1 var(--mono); letter-spacing: 0.06em; margin-bottom: 10px; }
-.track[aria-pressed="true"] .track-code { color: var(--accent); }
+.track[aria-checked="true"] .track-code { color: var(--accent); }
 .track-title { display: block; font-size: 1.2rem; letter-spacing: -0.01em; }
 .track-line { display: block; font-size: 0.9rem; color: var(--muted); margin-top: 2px; }
 
@@ -93,6 +93,12 @@ a:hover { color: var(--accent); }
 .vol input { width: 140px; accent-color: var(--text); }
 .vol output { font: 0.85rem var(--mono); min-width: 4ch; }
 
+.tools { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 8px; margin-left: -8px; }
+.tools .btn-quiet { font-size: 0.9rem; text-decoration: underline; text-decoration-color: #4a4944; text-underline-offset: 4px; }
+.tools .btn-quiet:hover, .tools .btn-quiet[aria-pressed="true"] { color: var(--text); background: none; border-color: transparent; text-decoration-color: var(--text); }
+.method-head { margin-top: 30px; }
+.method { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.88rem; }
+.method li { margin: 0 0 8px; }
 .readout { margin: 16px 0 0; font-size: 1.15rem; min-height: 1.6em; }
 .status { color: var(--muted); font-size: 0.9rem; margin: 10px 0 0; }
 .status:empty { display: none; }
@@ -114,13 +120,21 @@ a:hover { color: var(--accent); }
 .swatch-none { height: 0; }
 
 .meters { display: grid; gap: 12px; }
-.meter { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center; font-size: 0.9rem; }
+.meter { display: grid; grid-template-columns: 1fr 1fr 92px; gap: 16px; align-items: center; font-size: 0.9rem; }
+.meter-val { font: 0.82rem var(--mono); color: var(--text); text-align: right; white-space: nowrap; }
 .meter-label { color: var(--muted); }
 .meter-bar { height: 2px; background: var(--rule); }
 .meter-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.12s linear; }
 
 .how { margin-top: 44px; padding-top: 28px; border-top: 1px solid var(--rule); }
-.how p { margin: 0; color: var(--muted); max-width: 78ch; font-size: 0.95rem; }
+.how p { margin: 0 0 10px; color: var(--muted); max-width: 78ch; font-size: 0.95rem; }
+
+/* How it works */
+.start { margin-top: 8px; padding-bottom: 28px; }
+.steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+.steps li { counter-increment: step; color: var(--muted); font-size: 0.95rem; }
+.steps li::before { content: counter(step); display: block; font: 0.78rem/1 var(--mono); color: var(--text); margin-bottom: 10px; }
+.steps strong { color: var(--text); font-weight: 500; display: block; }
 
 /* ---------- Tuning (only with ?tune) ---------- */
 .tuning-box { margin-top: 44px; padding-top: 28px; border-top: 1px dashed var(--rule); }
@@ -133,15 +147,25 @@ a:hover { color: var(--accent); }
 .foot p { margin: 0 0 6px; max-width: 90ch; }
 
 /* ---------- Small screens ---------- */
+@media (max-width: 980px) and (min-width: 761px) {
+  .tracks { grid-template-columns: repeat(2, 1fr); }
+  .track:nth-child(3) { border-left: 0; padding-left: 0; }
+}
+
 @media (max-width: 760px) {
   body { font-size: 16px; }
   .tracks { grid-template-columns: 1fr; }
   .track, .track + .track { padding: 14px 0; border-left: 0; border-top: 1px solid var(--rule); margin-top: 0; }
-  .track[aria-pressed="true"] { border-top-color: var(--accent); }
+  .track[aria-checked="true"] { border-top-color: var(--accent); }
   .columns { grid-template-columns: 1fr; gap: 36px; }
   .vol { margin-left: 0; width: 100%; }
   .hero-text { bottom: 44px; }
   .hero-note { display: none; }
+  .steps { grid-template-columns: 1fr; gap: 16px; }
+  .meter { grid-template-columns: 1fr 80px; gap: 4px 12px; }
+  .meter .meter-val { grid-row: 1; grid-column: 2; }
+  .meter .meter-bar { grid-column: 1 / -1; }
+  .tune-row { grid-template-columns: 1fr; gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

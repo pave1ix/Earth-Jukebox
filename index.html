@@ -23,9 +23,18 @@
   </header>
 
   <main class="wrap">
+    <section class="start" aria-labelledby="start-h">
+      <h2 id="start-h" class="small-head">How it works</h2>
+      <ol class="steps">
+        <li><strong>Pick a track.</strong> Each one is a NASA view of Earth changing.</li>
+        <li><strong>Press Listen.</strong> First you hear what each sound means, then the music made from the picture.</li>
+        <li><strong>Ask or explore.</strong> Describe this moment gives a summary in words. Explore by touch lets you move across the map and hear each place.</li>
+      </ol>
+    </section>
+
     <section aria-labelledby="pick-h">
       <h2 id="pick-h" class="sr-only">Choose a track</h2>
-      <div id="tracks" class="tracks" role="group" aria-label="Tracks"></div>
+      <div id="tracks" class="tracks" role="radiogroup" aria-labelledby="pick-h"></div>
     </section>
 
     <section id="player" class="player" aria-labelledby="now-title" tabindex="-1">
@@ -36,7 +45,8 @@
       </div>
 
       <div class="controls">
-        <button id="play" class="btn btn-solid" type="button" aria-pressed="false">Listen</button>
+        <button id="play" class="btn btn-solid" type="button" aria-pressed="false" aria-describedby="listen-help">Listen</button>
+        <span id="listen-help" class="sr-only">Starts the sound. The first time you hear a track, each sound is explained before the music.</span>
         <button id="explore" class="btn" type="button" aria-pressed="false">Explore by touch</button>
         <button id="freeze" class="btn btn-quiet" type="button" hidden>Freeze frame</button>
         <span class="vol">
@@ -44,6 +54,11 @@
           <input id="volume" type="range" min="0" max="100" value="60">
           <output id="volume-out" for="volume">60%</output>
         </span>
+      </div>
+      <div class="tools">
+        <button id="describe" class="btn btn-quiet" type="button">Describe this moment</button>
+        <button id="hearkey" class="btn btn-quiet" type="button" aria-pressed="false">Hear the key</button>
+        <button id="speak" class="btn btn-quiet" type="button" aria-pressed="false">Read aloud: off</button>
       </div>
       <p id="readout" class="readout" hidden></p>
       <p id="status" class="status" role="status"></p>
@@ -61,12 +76,15 @@
         <dl id="key" class="key"></dl>
         <h3 class="small-head">Live readings</h3>
         <div id="meters" class="meters"></div>
+        <h3 class="small-head method-head">How it reads the data</h3>
+        <ul id="method" class="method"></ul>
       </section>
     </div>
 
     <section class="how" aria-labelledby="how-h">
       <h2 id="how-h" class="small-head">Controls</h2>
-      <p>Space starts or pauses the sound. Left and Right change track. Up and Down change volume. E turns on explore mode: move the mouse, a finger or the arrow keys across the map to hear each place and have it described. Escape returns to the music.</p>
+      <p>Every action has a button. Keyboard shortcuts: Space starts or pauses the sound, D describes what is on screen, K plays the listening key, E turns explore mode on, R reads descriptions aloud, Up and Down change volume, and Escape skips the key or leaves explore mode. In the track list, the arrow keys move between tracks.</p>
+      <p>Using a screen reader? The buttons work as usual. Single-letter shortcuts need focus mode (in Narrator, Caps Lock + Space turns scan mode off). In explore mode the map takes the arrow keys directly, and every place you move to is read out.</p>
     </section>
 
     <section id="tuning-box" class="tuning-box" hidden>

@@ -13,7 +13,8 @@ const MAX_NOTES_PER_SEC = 4;
 const LIGHT_MIN = 0.0005;      // night lights: total light that reads as empty
 const LIGHT_FULL = 0.00097;    // night lights: total light that reads as full
 const CHANGE_FULL = 0.003;     // night lights: share of the map that reads as full change
-const LIGHTNING_FULL = 0.002;  // lightning: share of the view that reads as full
+const CO2_FULL = 0.016;        // co2: share of the map in thick orange that reads as full
+const LIGHTNING_FULL = 0.0024; // lightning: share of the view that reads as full
 const BASE = { pad: -16, bell: -14, soft: -12, drone: -22 }; // dB before tuning offsets
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -151,6 +152,8 @@ export class SoundEngine {
       this.pad.triggerAttack([note(D3), note(D3 + 2), note(D3 + 4)], now + 0.05, 0.25);
     } else if (track.id === 'nightlights') {
       this.drone.triggerAttack(note(D3), now + 0.05);
+    } else if (track.id === 'co2') {
+      this.pad.triggerAttack([note(D3), note(D3 + 2), note(D3 + 4)], now + 0.05, 0.35);
     }
   }
 
@@ -195,11 +198,14 @@ export class SoundEngine {
   playExplore(sound, pan, loc) {
     if (!this.ready || !this.explore || !sound || sound.kind === 'none') return;
     const now = Tone.now() + 0.01;
-    const count = Math.max(1, sound.count || 1);
+    const count = sound.kind === 'arp' ? 1 : Math.max(1, sound.count || 1);
     for (let k = 0; k < count; k++) {
-      const time = now + k * 0.09;
+      const time = now + k * 0.12;
       if (sound.kind === 'soft') this.softAt(sound.idx, time, sound.vel, pan, loc);
-      else this.bellAt(sound.idx + (k % 2) * 2, time, sound.vel, pan, k === 0 ? loc : null);
+      else if (sound.kind === 'arp') {
+        // a chord played as a quick arpeggio: root, third and fifth of the scale
+        [0, 2, 4].forEach((step, j) => this.bellAt(sound.idx + step, time + j * 0.14, sound.vel, pan, j === 0 ? loc : null));
+      } else this.bellAt(sound.idx + (k % 2) * 2, time, sound.vel, pan, k === 0 ? loc : null);
     }
   }
 
@@ -208,6 +214,7 @@ export class SoundEngine {
     const now = Tone.now();
     if (this.track.id === 'ocean') return this.ocean(f, dt, now);
     if (this.track.id === 'nightlights') return this.nightlights(f, dt, now);
+    if (this.track.id === 'co2') return this.co2(f, dt, now);
     return this.lightning(f, dt, now);
   }
 
@@ -309,6 +316,33 @@ export class SoundEngine {
     return {
       meters: { density: s.d, latitude: s.lat, side: s.side },
       playhead: null,
+    };
+  }
+
+  // CO2: the background pad swells with the total thick CO2 on screen, so the day-night pulse
+  // is heard as breathing. A playhead sweeps west to east; thick plumes sound a low soft tone,
+  // pitched by latitude.
+  co2(f, dt, now) {
+    const s = this.s;
+    const t = this.track.tune;
+    s.g += 0.3 * (clamp(f.density / CO2_FULL, 0, 1) - s.g);
+    this.padVol.volume.rampTo(BASE.pad + (t.pad || 0) - 14 + 16 * s.g, 0.6);
+    this.filter.frequency.rampTo(400 + 2400 * s.g, 0.6);
+    if (f.density > 0.0004) { s.lat = 1 - f.posYD; s.side = f.posXD; }
+    s.timer += dt;
+    if (s.timer >= t.step) {
+      s.timer = 0;
+      s.col = (s.col + 1) % 16;
+      const col = f.cols[s.col];
+      const bn = s.colN.norm(col.density);
+      if (col.density > 0.0005 && bn > t.gate) {
+        const idx = D3 + 1 + Math.round((1 - col.posD) * 9);
+        this.softAt(idx, now + 0.02, 0.25 + 0.55 * bn, panOf(s.col, 16, 0.8), { u: (s.col + 0.5) / 16, v: col.posD });
+      }
+    }
+    return {
+      meters: { amount: s.g, latitude: s.lat, side: s.side },
+      playhead: { axis: 'x', pos: (Math.max(s.col, 0) + 0.5) / 16 },
     };
   }
 }
