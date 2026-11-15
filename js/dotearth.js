@@ -2,7 +2,7 @@
 // Bright data makes dense dots, dark areas stay empty, and each dot keeps the colour of the data.
 // When a note plays, a ring of dots spreads from the place on the map that the note came from.
 
-export const CELL = 4; // one dot every 4 screen pixels (finer on high-density screens)
+export const CELL = 4; // default: one dot every 4 screen pixels
 const RIPPLE_MS = 1700;
 
 // 8 x 8 ordered-dither thresholds (Bayer matrix), 0..1
@@ -15,9 +15,10 @@ const BAYER = (() => {
 
 // Pure drawing step: src = RGBA samples (cols x rows), out = RGBA pixels (cols*CELL x rows*CELL).
 // mask (optional) = cells that are never drawn (labels and colour bars inside the NASA frame).
-export function drawDots(src, cols, rows, out, opts, ripples = [], mask = null) {
+// time (seconds) makes the dots shimmer gently, like a live signal; pass null for a still image.
+export function drawDots(src, cols, rows, out, opts, ripples = [], mask = null, cell = CELL, dot = 2, time = null) {
   out.fill(0);
-  const W = cols * CELL;
+  const W = cols * cell;
   const gain = opts.gain ?? 1.5;
   const gamma = opts.gamma ?? 0.85;
   const colour = opts.colour ?? 0; // 0 = brightness only, 1 = only coloured data makes dots
@@ -31,9 +32,15 @@ export function drawDots(src, cols, rows, out, opts, ripples = [], mask = null) 
       const level0 = (hi / 255) * gain * (1 - colour + colour * 1.5 * sat);
       let v = Math.min(1, Math.pow(level0, gamma));
       v = v < 0.04 ? 0 : (v - 0.04) / 0.96; // floor: black stays empty
+      if (time !== null && v > 0) {
+        // each dot has its own rhythm; a slow wave also drifts across the picture
+        const h = (((x * 73856093) ^ (y * 19349663)) & 1023) * 0.00614;
+        v *= 1 + 0.2 * Math.sin(time * 1.7 + h) + 0.14 * Math.sin(time * 0.6 - x * 0.045 + y * 0.03);
+        if (v > 1) v = 1;
+      }
       let ring = 0;
       for (const p of ripples) {
-        const k = 1 - Math.abs(Math.hypot(x - p.x, y - p.y) - p.rad) / (p.thick || 2.2);
+        const k = 1 - Math.abs(Math.hypot(x - p.x, y - p.y) - p.rad) / 2.2;
         if (k > 0) ring = Math.max(ring, k * p.a);
       }
       v = Math.min(1, v + ring);
@@ -46,9 +53,9 @@ export function drawDots(src, cols, rows, out, opts, ripples = [], mask = null) 
       const cr = ((r / max) * (1 - soften) + soften) * level * 255;
       const cg = ((g / max) * (1 - soften) + soften) * level * 255;
       const cb = ((b / max) * (1 - soften) + soften) * level * 255;
-      const size = v > 0.9 ? 3 : 2;
+      const size = v > 0.9 ? dot + 1 : dot;
       for (let dy = 0; dy < size; dy++) {
-        let o = ((y * CELL + dy) * W + x * CELL) * 4;
+        let o = ((y * cell + dy) * W + x * cell) * 4;
         for (let dx = 0; dx < size; dx++, o += 4) {
           out[o] = cr; out[o + 1] = cg; out[o + 2] = cb; out[o + 3] = 255;
         }
@@ -88,7 +95,7 @@ export class DotEarth {
     const loop = (now) => {
       requestAnimationFrame(loop);
       if (document.hidden || now - last < 70) return;
-      if (!(this.dirty || this.ripples.length || (this.live && !this.reduced))) return;
+      if (this.reduced && !this.dirty) return; // reduced motion: draw only when the picture changes
       last = now;
       this.draw(now);
     };
@@ -97,14 +104,17 @@ export class DotEarth {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
-    this.dpr = Math.min(3, window.devicePixelRatio || 1);
-    this.cols = Math.max(8, Math.ceil((rect.width * this.dpr) / CELL));
-    this.rows = Math.max(8, Math.ceil((rect.height * this.dpr) / CELL));
-    this.canvas.width = this.cols * CELL;
-    this.canvas.height = this.rows * CELL;
+    // About one dot every 3 to 4 CSS pixels on any screen, drawn in real device pixels so it stays crisp.
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    this.cell = dpr < 1.5 ? CELL : Math.round(3 * dpr);
+    this.dot = Math.max(2, Math.round(this.cell / 2));
+    this.cols = Math.max(8, Math.ceil((rect.width * dpr) / this.cell));
+    this.rows = Math.max(8, Math.ceil((rect.height * dpr) / this.cell));
+    this.canvas.width = this.cols * this.cell;
+    this.canvas.height = this.rows * this.cell;
     this.small.width = this.cols;
     this.small.height = this.rows;
-    this.image = this.ctx.createImageData(this.cols * CELL, this.rows * CELL);
+    this.image = this.ctx.createImageData(this.cols * this.cell, this.rows * this.cell);
     this.dirty = true;
   }
 
@@ -160,16 +170,23 @@ export class DotEarth {
     const vw = useVideo ? v.w * srcW : srcW, vh = useVideo ? v.h * srcH : srcH;
     this.fit = coverRect(vw / vh, cols / rows, t.focusY ?? 0.5);
     const f = this.fit;
-    sctx.imageSmoothingQuality = 'high';
-    sctx.drawImage(useVideo ? video : this.poster, vx + f.x * vw, vy + f.y * vh, f.w * vw, f.h * vh, 0, 0, cols, rows);
-    const src = sctx.getImageData(0, 0, cols, rows).data;
+    // Re-read the frame only when it can have changed; otherwise reuse the last one.
+    const key = `${t.id}:${useVideo}:${cols}x${rows}`;
+    if (this.live || this.dirty || this.srcKey !== key || !this.src) {
+      sctx.imageSmoothingQuality = 'high';
+      sctx.drawImage(useVideo ? video : this.poster, vx + f.x * vw, vy + f.y * vh, f.w * vw, f.h * vh, 0, 0, cols, rows);
+      this.src = sctx.getImageData(0, 0, cols, rows).data;
+      this.srcKey = key;
+    }
+    const src = this.src;
 
     this.ripples = this.ripples.filter((p) => now - p.t0 < RIPPLE_MS);
     const rip = this.ripples.map((p) => {
       const age = (now - p.t0) / RIPPLE_MS;
-      return { x: p.x, y: p.y, rad: (2 + age * 24) * this.dpr, a: p.s * (1 - age), thick: 2.2 * this.dpr };
+      return { x: p.x, y: p.y, rad: 2 + age * 26, a: p.s * (1 - age) };
     });
-    drawDots(src, cols, rows, this.image.data, t.dot || {}, rip, this.maskFor(t, f));
+    drawDots(src, cols, rows, this.image.data, t.dot || {}, rip, this.maskFor(t, f), this.cell, this.dot,
+      this.reduced ? null : now / 1000);
     this.ctx.putImageData(this.image, 0, 0);
     this.dirty = false;
   }

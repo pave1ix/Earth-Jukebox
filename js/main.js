@@ -34,6 +34,8 @@ let meterRefs = {};
 let lastFrame = null;
 let cell = { r: 7, c: 7 };
 let announceTimer = null;
+let userPaused = false; // true after the listener presses Pause
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Every note lights up the dot Earth at the place on the map it came from.
 sound.onNote = (loc, vel) => dots.ping(loc.u, loc.v, 0.45 + vel * 0.5);
@@ -69,6 +71,7 @@ function loadTrack(i) {
   video.loop = !t.segment;
   video.src = t.file;
   video.load();
+  startPreview();
 
   analyzer.reset();
   lastFrame = null;
@@ -113,6 +116,16 @@ video.addEventListener('loadedmetadata', () => {
   if (t.segment) video.currentTime = t.segment[0];
 });
 video.addEventListener('loadeddata', () => { dots.dirty = true; });
+video.addEventListener('play', () => dots.setLive(true));
+video.addEventListener('pause', () => dots.setLive(false));
+video.addEventListener('timeupdate', () => keepInSegment());
+
+// Silent preview: the muted NASA clip runs before any sound starts, so the page shows the planet moving.
+function startPreview() {
+  if (REDUCED || userPaused) return;
+  const p = video.play();
+  if (p && p.catch) p.catch(() => {});
+}
 video.addEventListener('seeked', () => { dots.dirty = true; });
 
 function keepInSegment() {
@@ -157,7 +170,7 @@ async function startPlayback() {
   sound.setTrack(TRACKS[current]);
   sound.fadeIn(1.2);
   playing = true;
-  dots.setLive(true);
+  userPaused = false;
   startLoop();
   setStatus('');
 }
@@ -172,7 +185,7 @@ async function togglePlay() {
     } else {
       if (exploring) setExplore(false);
       playing = false;
-      dots.setLive(false);
+      userPaused = true;
       video.pause();
       stopLoop();
       await sound.fadeOut(0.4);
@@ -354,7 +367,7 @@ function announce(msg) { $('live').textContent = msg; }
 function setStatus(msg) { statusEl.textContent = msg; }
 
 function updateButtons() {
-  playBtn.textContent = playing ? 'Pause' : 'Play';
+  playBtn.textContent = playing ? 'Pause' : 'Listen';
   playBtn.setAttribute('aria-pressed', String(playing));
   exploreBtn.textContent = exploring ? 'Back to listening' : 'Explore by touch';
   exploreBtn.setAttribute('aria-pressed', String(exploring));

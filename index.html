@@ -6,6 +6,7 @@
   <title>Earth Jukebox: hear the planet change</title>
   <meta name="description" content="Earth Jukebox turns NASA Earth Information Center visualizations into live sound, so anyone can hear the planet change and explore it by touch.">
   <meta name="ai-disclosure" content="Code written with AI assistance (Claude Opus 5.5 and Claude Fable 5.2), directed and tuned by the team. All audio is generated live by an algorithm from NASA visualization frames. No audio, images or video were made by generative AI.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0a0a'/%3E%3Cg fill='%23f1f0ec'%3E%3Crect x='7' y='2' width='2' height='2'/%3E%3Crect x='4' y='5' width='2' height='2'/%3E%3Crect x='7' y='5' width='2' height='2'/%3E%3Crect x='10' y='5' width='2' height='2'/%3E%3Crect x='2' y='8' width='2' height='2'/%3E%3Crect x='5' y='8' width='2' height='2'/%3E%3Crect x='9' y='8' width='2' height='2'/%3E%3Crect x='12' y='8' width='2' height='2'/%3E%3Crect x='4' y='11' width='2' height='2'/%3E%3Crect x='7' y='11' width='2' height='2'/%3E%3Crect x='10' y='11' width='2' height='2'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-track="ocean">
@@ -35,7 +36,7 @@
       </div>
 
       <div class="controls">
-        <button id="play" class="btn btn-solid" type="button" aria-pressed="false">Play</button>
+        <button id="play" class="btn btn-solid" type="button" aria-pressed="false">Listen</button>
         <button id="explore" class="btn" type="button" aria-pressed="false">Explore by touch</button>
         <button id="freeze" class="btn btn-quiet" type="button" hidden>Freeze frame</button>
         <span class="vol">
@@ -65,7 +66,7 @@
 
     <section class="how" aria-labelledby="how-h">
       <h2 id="how-h" class="small-head">Controls</h2>
-      <p>Space plays or pauses. Left and Right change track. Up and Down change volume. E turns on explore mode: move the mouse, a finger or the arrow keys across the map to hear each place and have it described. Escape returns to the music.</p>
+      <p>Space starts or pauses the sound. Left and Right change track. Up and Down change volume. E turns on explore mode: move the mouse, a finger or the arrow keys across the map to hear each place and have it described. Escape returns to the music.</p>
     </section>
 
     <section id="tuning-box" class="tuning-box" hidden>
