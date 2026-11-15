@@ -55,21 +55,12 @@ function buildTrackButtons() {
     const b = document.createElement('button');
     b.className = 'track';
     b.type = 'button';
-    b.setAttribute('role', 'radio');
-    b.setAttribute('aria-checked', 'false');
+    b.setAttribute('aria-current', 'false');
     b.innerHTML = `<span class="track-code" aria-hidden="true">${t.code}</span>
       <span class="track-title">${t.title}</span>
       <span class="track-line">${t.line}</span>`;
     b.addEventListener('click', () => selectTrack(i));
     wrap.appendChild(b);
-  });
-  // Arrow keys move between tracks inside the group, like any radio group.
-  wrap.addEventListener('keydown', (e) => {
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    e.stopPropagation();
-    selectTrack(current + step).then(() => wrap.children[current].focus());
   });
 }
 
@@ -102,10 +93,7 @@ function loadTrack(i) {
   const src = $('now-source');
   src.href = t.source;
   src.textContent = t.source.replace('https://', '');
-  document.querySelectorAll('.track').forEach((b, j) => {
-    b.setAttribute('aria-checked', String(j === current));
-    b.tabIndex = j === current ? 0 : -1;
-  });
+  document.querySelectorAll('.track').forEach((b, j) => b.setAttribute('aria-current', String(j === current)));
 
   $('key').innerHTML = t.key.map((k) => {
     const sw = k.swatch === 'line' ? '<span class="swatch swatch-line"></span>'
@@ -523,6 +511,7 @@ document.addEventListener('keydown', (e) => {
   if (inField || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape' && keyRunning) { stopKey(); return; }
   if (e.key === ' ' && !onControl) { e.preventDefault(); togglePlay(); }
+  else if (e.key >= '1' && e.key <= String(TRACKS.length)) { selectTrack(Number(e.key) - 1); }
   else if (e.key === 'e' || e.key === 'E') { toggleExplore(); }
   else if (e.key === 'd' || e.key === 'D') { describeNow(); }
   else if (e.key === 'k' || e.key === 'K') { playKey(false); }
