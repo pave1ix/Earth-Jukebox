@@ -73,9 +73,9 @@ a:hover { color: var(--accent); }
 .stage { position: relative; width: 100%; overflow: hidden; background: #000 center / cover no-repeat; }
 .stage video { position: absolute; display: block; max-width: none; object-fit: fill; }
 .is-exploring .stage { cursor: crosshair; touch-action: none; outline: 1px solid var(--text); outline-offset: 3px; }
-.playhead { position: absolute; pointer-events: none; background: var(--text); opacity: 0.85; }
-.playhead.axis-x { top: 0; bottom: 0; width: 1px; transition: left 0.15s linear; }
-.playhead.axis-y { left: 0; right: 0; height: 1px; transition: top 0.15s linear; }
+.playhead { position: absolute; pointer-events: none; background: #fff; opacity: 0.95; box-shadow: 0 0 0 1px rgba(0,0,0,0.55), 0 0 10px var(--accent); }
+.playhead.axis-x { top: 0; bottom: 0; width: 2px; margin-left: -1px; transition: left 0.15s linear; }
+.playhead.axis-y { left: 0; right: 0; height: 2px; margin-top: -1px; transition: top 0.15s linear; }
 .cursor { position: absolute; pointer-events: none; border: 1px solid #fff; box-shadow: 0 0 0 1px #000; }
 
 /* ---------- Controls ---------- */
@@ -154,14 +154,26 @@ a:hover { color: var(--accent); }
 
 @media (max-width: 760px) {
   body { font-size: 16px; }
-  .tracks { grid-template-columns: 1fr; }
-  .track, .track + .track { padding: 14px 0; border-left: 0; border-top: 1px solid var(--rule); margin-top: 0; }
-  .track[aria-current="true"] { border-top-color: var(--accent); }
+  /* Phone: short hero, compact steps and a 2 x 2 track grid so the video is near the top */
+  .hero { height: 230px; }
+  .hero-text { bottom: 20px; }
+  .sub { display: none; }
+  .start { padding-bottom: 14px; }
+  .steps { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .steps li { font-size: 0.85rem; }
+  .steps li::before { margin-bottom: 4px; }
+  .steps li span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tracks { grid-template-columns: 1fr 1fr; border-top: 0; gap: 8px; margin-top: 0; }
+  .track, .track + .track { padding: 10px 12px; border: 1px solid var(--rule); border-top-width: 2px; margin: 0; }
+  .track[aria-current="true"] { border-color: var(--rule); border-top-color: var(--accent); background: #151514; }
+  .track-title { font-size: 1rem; }
+  .track-line { display: none; }
+  .player { margin-top: 14px; }
+  .controls .btn { flex: 1 1 auto; }
+  .tools { margin-left: 0; }
   .columns { grid-template-columns: 1fr; gap: 36px; }
   .vol { margin-left: 0; width: 100%; }
-  .hero-text { bottom: 44px; }
   .hero-note { display: none; }
-  .steps { grid-template-columns: 1fr; gap: 16px; }
   .meter { grid-template-columns: 1fr 80px; gap: 4px 12px; }
   .meter .meter-val { grid-row: 1; grid-column: 2; }
   .meter .meter-bar { grid-column: 1 / -1; }

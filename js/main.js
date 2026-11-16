@@ -171,6 +171,10 @@ function buildTuning() {
 async function startPlayback() {
   if (!sound.ready) {
     setStatus('Starting sound…');
+    // Phones get a larger audio buffer before the sound starts, which stops crackling.
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      try { Tone.setContext(new Tone.Context({ latencyHint: 'playback' })); } catch (e) { /* keep default */ }
+    }
     await Tone.start();
     await sound.init();
   }

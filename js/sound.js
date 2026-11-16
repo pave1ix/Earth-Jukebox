@@ -50,9 +50,13 @@ export class SoundEngine {
   }
 
   async init() {
+    // Phones: a bigger audio buffer stops crackling, a shorter reverb saves CPU,
+    // and the 'playback' session plays sound even when an iPhone is on silent.
+    const phone = window.matchMedia('(pointer: coarse)').matches;
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
     this.master = new Tone.Volume(-80).toDestination();
     this.limiter = new Tone.Limiter(-3).connect(this.master);
-    this.reverb = new Tone.Reverb({ decay: 9, preDelay: 0.06, wet: 0.45 }).connect(this.limiter);
+    this.reverb = new Tone.Reverb({ decay: phone ? 4.5 : 9, preDelay: 0.06, wet: 0.45 }).connect(this.limiter);
     if (this.reverb.ready) await this.reverb.ready;
     this.filter = new Tone.Filter({ type: 'lowpass', frequency: 1500, rolloff: -12, Q: 0.5 }).connect(this.reverb);
 
