@@ -20,6 +20,7 @@ Built for the **NASA Space Apps Challenge 2026**, challenge: *The Earth Informat
 | --- | --- | --- |
 | Ocean currents | [SVS 3912](https://svs.gsfc.nasa.gov/3912) | A scan line moves pole to pole. Water temperature on the line sets the chord, low for cold and high for warm. Faster currents add bells. |
 | Night lights | [SVS 5313](https://svs.gsfc.nasa.gov/5313) | A playhead sweeps west to east. Lit regions ring bells, north is higher, and the drone swells as total light grows from 2012 to 2023. In the change map, new lights ring a bright high bell and lights that went out sound a low tone. |
+| Carbon dioxide | [SVS 5436](https://svs.gsfc.nasa.gov/5436), flat map of [SVS 5196](https://svs.gsfc.nasa.gov/5196) | The background swells and fades with the thick CO2 on screen, so the day-night pulse NASA describes is heard as breathing. A playhead sweeps west to east and thick plumes sound a low tone, pitched by latitude. |
 | Lightning from orbit | [SVS 5011](https://svs.gsfc.nasa.gov/5011) | Only detected lightning makes chimes: more lightning, more chimes. No lightning, no chimes. Pitch follows height on the globe. |
 
 ### Honest reading of the frames
@@ -55,7 +56,7 @@ Open the folder in VS Code and use the Live Server extension ("Go Live"). Openin
 ## Credits
 
 - Visualizations: NASA's Scientific Visualization Studio (Earth Information Center collection). NASA does not endorse this project.
-- Data: ECCO2 ocean model (NASA/JPL); NASA Black Marble, Suomi NPP VIIRS; Lightning Imaging Sensor on the ISS (NASA GHRC DAAC).
+- Data: ECCO2 ocean model (NASA/JPL); NASA Black Marble, Suomi NPP VIIRS; Lightning Imaging Sensor on the ISS (NASA GHRC DAAC); DYAMOND run of the GEOS model (NASA Goddard).
 - Sound engine: [Tone.js](https://tonejs.github.io/) 15.1.22, MIT License.
 
 ## AI use
